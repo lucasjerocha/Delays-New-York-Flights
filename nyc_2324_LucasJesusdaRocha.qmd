@@ -1,0 +1,474 @@
+---
+title: "Delays in NYC airports"
+subtitle: "Business Analytics (23/24)"
+format: 
+  html:
+    fig-width: 8
+    fig-height: 4
+    embed-resources: true
+    code-fold: false
+    standalone: true
+    toc: true
+    toc-location: left
+    toc-depth: 2
+    number-sections: true
+---
+
+```{r, message=FALSE}
+library(tidymodels)
+library(nycflights13)
+library(lubridate)
+library(themis)
+library(gridExtra)
+```
+
+In this job, we will work with data from the `nycflights13` package, specifically with:
+
+-   `flights`, reporting on-time data for all flights that departed NYC (i.e. JFK, LGA or EWR) in 2013.
+-   `weather`, including hourly meteorological data for LGA, JFK and EWR in 2013.
+
+The job has two parts:
+
+-   Examining if some variables affect the departure delay `dep_delay`.
+-   Define a model predicting if a flight will depart late (`dep_delay` greater than 15 minutes).
+
+*Each of the two parts of the exam has the same weight of 50% to final degree.*
+
+```{r}
+flights <- nycflights13::flights
+airlines_data <- nycflights13::airlines
+airports_data <- nycflights13::airports
+planes_data <- nycflights13::planes
+weather_data <- nycflights13::weather
+```
+
+
+# Examining variables
+
+In this section you will examine the impact of some variables departure delay. Please consider that some values of `dep_delay` are `NA` so you need to consider it when computing the mean of departure delay. Choose the adequate plot for each variable.   
+
+
+## Planned Departure Hour
+
+For each `origin` airport, examine the evolution of average departure delay for each hour of planned departure, represented with the variable `hour`. Comment briefly the obtained result.
+```{r}
+unique(flights$origin) 
+
+EWR_delay_data_hour <- flights %>%
+  filter(flights$origin == "EWR" & flights$dep_delay > 0) %>%
+  group_by(hour) %>%
+  count() %>%
+  rename(TotalDelays_EWR = n)
+EWR_delay_data_hour  
+EWR_delays_mean <- mean(EWR_delay_data_hour$TotalDelays_EWR)
+
+LGA_delay_data_hour <- flights %>%
+  filter(flights$origin == "LGA" & flights$dep_delay > 0) %>%
+  group_by(hour) %>%
+  count() %>%
+  rename(TotalDelays_LGA = n)
+LGA_delay_data_hour
+LGA_delays_mean <- mean(LGA_delay_data_hour$TotalDelays_LGA)
+
+JFK_delay_data_hour <- flights %>%
+  filter(flights$origin == "JFK" & flights$dep_delay > 0) %>%
+  group_by(hour) %>%
+  count() %>%
+  rename(TotalDelays_JFK = n)
+JFK_delay_data_hour
+JFK_delays_mean <- mean(JFK_delay_data_hour$TotalDelays_JFK)
+
+plot1.1_EWR <- ggplot(EWR_delay_data_hour, aes(factor(hour), TotalDelays_EWR, fill = factor(hour))) +
+  geom_col() +
+  geom_hline(yintercept = EWR_delays_mean, color="black") +
+  labs(x = "Hour", y = "Delays", 
+       title = "Hour vs Delays (EWR)") +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "none")
+
+plot1.1_LGA <- ggplot(LGA_delay_data_hour, aes(factor(hour), TotalDelays_LGA, fill = factor(hour))) +
+  geom_col() +
+  geom_hline(yintercept = LGA_delays_mean, color="black") +
+  labs(x = "Hour", y = "Delays", 
+       title = "Hour vs Delays (LGA)") +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "none")
+
+plot1.1_JFK <- ggplot(JFK_delay_data_hour, aes(factor(hour), TotalDelays_JFK, fill = factor(hour))) +
+  geom_col() +
+  geom_hline(yintercept = JFK_delays_mean, color="black") +
+  labs(x = "Hour", y = "Delays", 
+       title = "Hour vs Delays (JFK)") +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "none")
+
+plot1.1_EWR
+plot1.1_JFK
+plot1.1_LGA
+
+grid.arrange(plot1.1_EWR, plot1.1_JFK, plot1.1_LGA, ncol =3)
+
+
+
+```
+- We can conclude that the number of delays are higher in hours 16 - 19. 
+- There is a trend which tell us that during the beginning of the day and the end of day the delays are lower.
+- We can also observe that Airport LGA and JFK perform better than  Airport EWR in terms of the average of delays per hour.
+
+## Number of Flights
+
+For each `origin` and for each value of `time_hour`, calculate the average departure delay and the number of flights. With those values, plot for each `origin` airport the average departure delay as a function of number of flights. Comment briefly the obtained result.
+
+```{r}
+by_EWR_total <- flights %>%
+  filter(flights$origin == "EWR" & flights$dep_delay > 0) %>%
+  group_by(time_hour) %>%
+  summarise(Total_Flights = n(),
+            AverageDep_Delay = mean(dep_delay)) 
+by_EWR_total
+
+by_LGA_total <- flights %>%
+  filter(flights$origin == "LGA" & flights$dep_delay > 0) %>%
+  group_by(time_hour) %>%
+  summarise(Total_Flights = n(),
+            AverageDep_Delay = mean(dep_delay)) 
+by_LGA_total
+
+by_JFK_total <- flights %>%
+  filter(flights$origin == "JFK" & flights$dep_delay > 0) %>%
+  group_by(time_hour) %>%
+  summarise(Total_Flights = n(),
+            AverageDep_Delay = mean(dep_delay)) 
+by_JFK_total
+
+plot1.2_EWR <- ggplot(by_EWR_total, aes(Total_Flights, AverageDep_Delay)) +
+  geom_point() +
+  geom_smooth(method = "lm") + ##gam se adapta melhor aos dados
+  labs(x = "Total Number of flights", y = "Average Departure Delays",
+       title = "Total Number of flights vs Average Departure Delays (EWR)") +
+  theme_minimal()+
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = "0.5"))
+
+plot1.2_LGA <- ggplot(by_LGA_total, aes(Total_Flights, AverageDep_Delay)) +
+  geom_point() +
+  geom_smooth(method = "lm") + 
+  labs(x = "Total Number of flights", y = "Average Departure Delays",
+       title = "Total Number of flights vs Average Departure Delays (LGA)") +
+  theme_minimal()+
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = "0.5"))
+
+plot1.2_JFK <- ggplot(by_JFK_total, aes(Total_Flights, AverageDep_Delay)) +
+  geom_point() +
+  geom_smooth(method = "lm") + 
+  labs(x = "Total Number of flights", y = "Average Departure Delays",
+       title = "Total Number of flights vs Average Departure Delays (JFK)") +
+  theme_minimal()+
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = "0.5"))
+
+plot1.2_EWR
+plot1.2_JFK
+plot1.2_LGA
+
+grid.arrange(plot1.2_EWR, plot1.2_JFK, plot1.2_LGA, ncol=3)
+
+```
+- Based on the above graphics, it is clear that as the number of flights increases, the average departure delay time also increases.
+
+## Weekday
+
+Create a `weekday` column from `time_hour` using the `wday()` function of `lubridate` with `label = TRUE`. For each day of the and for each `origin`, calculate the average departure delay. Comment briefly the obtained result.
+
+```{r}
+
+flights_weekday <- flights %>%
+  mutate(weekday = wday(time_hour, label = TRUE))
+
+average_delays <- flights_weekday %>%
+  filter(!is.na(dep_delay)) %>%  
+  group_by(origin, weekday) %>%
+  summarise(average_delay = mean(dep_delay, na.rm = TRUE), .groups = 'drop')
+
+ggplot(average_delays, aes(x = weekday, y = average_delay, fill = origin)) +
+  geom_col(position = "dodge") +
+  labs(x = "Weekday", y = "Average Departure Delay (minutes)",
+       title = "Average Departure Delays by Weekday and Origin") +
+  theme_minimal()
+
+```
+
+- All three airports experience the highest average departure delays on Thursdays and Fridays.
+
+- EWR consistently shows higher departure delays than JFK and LGA (higher total number of flights)
+
+- Departure delays are generally lower on weekends (Sunday and Saturday) across all airports. 
+
+## Month
+
+For each `origin` airport, examine with an adequate plot the evolution of the average departure delay for each `month`. Comment briefly the obtained result.
+
+```{r}
+EWR_delay_data <- flights %>%
+  filter(flights$origin == "EWR" & flights$dep_delay > 0) %>%
+  group_by(month) %>%
+  count() %>%
+  rename(Month = month, TotalDelays = n)
+EWR_delay_data  
+EWR_delays_mean <- mean(EWR_delay_data$TotalDelays)
+
+LGA_delay_data <- flights %>%
+  filter(flights$origin == "LGA" & flights$dep_delay > 0) %>%
+  group_by(month) %>%
+  count() %>%
+  rename(Month = month, TotalDelays = n)
+LGA_delay_data
+LGA_delays_mean <- mean(LGA_delay_data$TotalDelays)
+
+JFK_delay_data <- flights %>%
+  filter(flights$origin == "JFK" & flights$dep_delay > 0) %>%
+  group_by(month) %>%
+  count() %>%
+  rename(Month = month, TotalDelays = n)
+JFK_delay_data
+JFK_delays_mean <- mean(JFK_delay_data$TotalDelays)
+
+plot1.3_EWR <- ggplot(EWR_delay_data, aes(factor(Month), TotalDelays, color = factor(Month), group = 2)) +
+  geom_point() +
+  geom_line(color = "red") +
+  geom_hline(yintercept = EWR_delays_mean, color="black") +
+  #scale_fill_manual(values = c("red", "blue", "green")) we need 12
+  labs(x="Month", y= "Delays",
+       title = "Month vs Delays (EWR)") +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "none") 
+
+plot1.3_LGA <- ggplot(LGA_delay_data, aes(factor(Month), TotalDelays, color = factor(Month), group = 2)) +
+  geom_point() +
+  geom_line(color = "red") +
+  geom_hline(yintercept = LGA_delays_mean, color="black") +
+  #scale_fill_manual(values = c("red", "blue", "green")) we need 12
+  labs(x="Month", y= "Delays",
+       title = "Month vs Delays (LGA)") +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "none") 
+
+plot1.3_JFK <- ggplot(JFK_delay_data, aes(factor(Month), TotalDelays, color = factor(Month), group = 2)) +
+  geom_point() +
+  geom_line(color = "red") +
+  geom_hline(yintercept = JFK_delays_mean, color="black") +
+  #scale_fill_manual(values = c("red", "blue", "green")) we need 12
+  labs(x="Month", y= "Delays",
+       title = "Month vs Delays (JFK)") +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "none") 
+
+grid.arrange(plot1.3_EWR, plot1.3_LGA, plot1.3_JFK, ncol=3)
+```
+
+
+- We can conclude that the number of delays are higher in december and lowest in Setember, Octuber and November. 
+- There is a trend which tell us that during the holiday season the delays are higher and they are lower just before the holiday period.
+- We can also observe that Airport LGA and JFK perform better than  Airport EWR in terms of the average of delays per month. This observation can be reasoned out as EWR flies out more flights than LGA or JFK.
+
+## Wind
+
+Join the `flights` and `weather` datasets, so that we can obtain the weather for each flight.
+
+```{r}
+### Bringing the flights data to similar granularity of the weather data
+by_time_hour_airport = flights %>%
+  filter(dep_delay > 0) %>%
+  group_by(origin, time_hour) %>%
+  summarise(totalDelay = mean(dep_delay),totalflightsdelayed = n())
+
+merged_fli_weather <- inner_join(by_time_hour_airport, weather_data, by =c("origin","time_hour")) 
+merged_fli_weather
+
+```
+
+
+Create a `windy` variable equal to one if `wind_speed` is larger than 25 and zero otherwise. For each `origin` airport, use boxplots to check if wind speed has impact on the average departure delay for each value of `time_hour`.
+
+```{r}
+windy_fli_weather <- merged_fli_weather %>%
+  mutate(windy = ifelse(wind_speed > 25, 1, 0))
+
+average_delays <- windy_fli_weather %>%
+  filter(!is.na(totalDelay)) %>%  
+  group_by(origin, time_hour, windy) %>%
+  summarise(average_delay = mean(totalDelay, na.rm = TRUE), .groups = 'drop')
+
+ggplot(average_delays, aes(x = as.factor(windy), y = average_delay, fill = origin)) +
+  geom_boxplot() +
+  facet_wrap(~ origin) +
+  labs(title = "Effect of Wind Conditions on Departure Delays by Origin Airport",
+       x = "Windy (1 = Wind Speed > 25, 0 = Wind Speed <= 25)",
+       y = "Departure Delay (minutes)",
+       fill = "Origin Airport") +
+  scale_fill_manual(values = c("EWR" = "green", "JFK" = "blue", "LGA" = "purple")) +
+  theme_minimal()
+
+```
+
+
+# Predictive Modelling
+
+Let's define a predictive model of delays **for the EWR airport** to predict **if a flight will arrive late**, that is, with a delay equal or larger than 15 minutes.
+
+## Target Variable
+
+Filter the flights departing from EWR, excluding observations with `NA` in `dep_delay`. Define the target variable as a binary factor, being the positive case that the flight arrives late.
+
+```{r}
+cleaning_flights <- nycflights13::flights %>%
+  filter(origin == "EWR", !is.na(dep_delay)) %>% 
+  mutate(
+    dep_delay = ifelse(dep_delay > 15, "late", "on time"), 
+    dep_delay = as.factor(dep_delay),  
+    time_hour = as.Date(time_hour, format = "%Y-%m-%d %H:%M:%S")  
+  ) %>%
+  na.omit() %>%
+  mutate(across(where(is.character), as.factor))
+```
+
+## Examining Target Variable
+
+Examine the target variable, and check if its prediction is a balanced or unbalanced problem.
+
+```{r}
+target_distribution <- cleaning_flights %>%
+  count(dep_delay) %>%
+  mutate(proportion = n / sum(n))
+
+target_distribution
+```
+The analysis shows that predicting flight delays at EWR is an unbalanced problem, with 24.52% of flights being late and 75.48% on time.
+
+## Model Elements
+
+Define model elements:
+
+-   Split the dataset into train and test set. Keep as train test 90% of observations.
+-   Define five folds of the training set for cross validation.
+-   Define as metrics sensitivity, specificy and accuracy.
+
+```{r}
+set.seed(123123)
+
+data_split <- initial_split(cleaning_flights, prop = 0.9, strata = dep_delay)
+train_data <- training(data_split)
+test_data <- testing(data_split)
+
+folds <- vfold_cv(train_data, v = 5, strata = dep_delay)
+
+metrics <- metric_set(accuracy, sensitivity, specificity)
+
+
+```
+
+
+## Preprocessing
+
+For data preprocessing, keep only some variables using the formula in `recipe()`:
+
+`dep_delay ~ month + hour + time_hour + carrier, training(split)`
+
+where `split` is the name of the split obtained in the previous section. 
+
+Include the following steps in preprocessing:
+
+-   Add a `weekday` variable using `time_hour`, and after that remove the `time_hour` variable.
+-   Define `month` and `hour` as factors.
+-   Transform all factors into dummies.
+-   Add a downsampling step.
+
+```{r}
+flight_recipe <- recipe(dep_delay ~ month + hour + time_hour + carrier, data = train_data) %>%
+  step_mutate(weekday = wday(time_hour, label = TRUE)) %>%
+  step_mutate(month = as.factor(month),
+              hour = as.factor(hour)) %>%
+  step_rm(time_hour) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_downsample(dep_delay)
+
+prepared_recipe <- prep(flight_recipe, train_data)
+
+```
+
+
+## Model definition
+
+Let's define two simple models:
+
+-   A **logistic regression** with `glmnet` with `penalty = 1` and `mixture = 0`.
+-   A **decision tree** with `rpart`.
+
+```{r}
+lr_mod <-
+  logistic_reg(penalty = 1, mixture = 0) %>%
+  set_engine("glmnet")
+lr_wf <- 
+  workflow() %>%
+  add_recipe(flight_recipe) %>%
+  add_model(lr_mod)
+lr_wf
+
+dt_mod <- decision_tree() %>%
+  set_engine("rpart") %>%
+  set_mode("classification")
+dt_wf <- 
+  workflow() %>%
+  add_recipe(flight_recipe) %>%
+  add_model(dt_mod)
+
+```
+
+
+## Cross Validation
+
+Test the two models with cross validation.
+
+```{r}
+lr_cv <- lr_wf %>%
+  fit_resamples(folds, metrics = metrics)
+
+dt_cv <- dt_wf %>%
+  fit_resamples(folds, metrics = metrics)
+
+lr_cv %>%
+  collect_metrics()
+
+dt_cv %>%
+  collect_metrics()
+
+
+```
+- I chose the decision tree model due to its higher sensitivity, which ensures better identification of delayed flights, aligning with the primary objective of minimizing missed detections of departure delays.
+
+## Select and Fit Model
+
+Select which model is best and train it with the whole train test. Briefly comment why have you chosen the model.
+
+```{r}
+best_model <- dt_wf %>% 
+  fit(train_data) 
+```
+
+
+## Test the Final Model
+
+Test the final model on the test set, obtaining the confusion matrix and the performance metrics. Comment briefly the results.
+
+```{r}
+best_model %>%
+  predict(test_data) %>%
+  bind_cols(test_data %>% select(dep_delay)) %>%
+  metrics(truth = dep_delay, estimate = .pred_class)
+
+best_model %>%
+  predict(test_data, type = "prob")
+```
+- Sensitivity is expected to be high, indicating that the model is effective in identifying delayed flights.
+Conclusion - These results confirm the model's alignment with the primary objective of detecting delayed flights effectively.
